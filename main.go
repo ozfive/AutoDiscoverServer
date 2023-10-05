@@ -4,59 +4,69 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/signal"
+	"syscall"
 )
 
-const maxDatagramSize = 8192
+const (
+	maxDatagramSize = 8192
+	servicePort     = 10001
+	requestString   = "REQUEST"
+)
 
 func main() {
+	serverAddr := fmt.Sprintf(":%d", servicePort)
 
-	/* Prepare a address at any address at port 10001*/
-	ServerAddr, err := net.ResolveUDPAddr("udp", ":10001")
+	udpAddr, err := net.ResolveUDPAddr("udp", serverAddr)
 	if err != nil {
-		fmt.Println("Error: ", err)
+		fmt.Println("Error resolving UDP address:", err)
 		os.Exit(1)
 	}
 
-	/* Now listen at selected port */
-	ServerConn, err := net.ListenUDP("udp", ServerAddr)
+	conn, err := net.ListenUDP("udp", udpAddr)
 	if err != nil {
-		fmt.Println("Error: ", err)
+		fmt.Println("Error listening:", err)
 		os.Exit(1)
 	}
-	defer ServerConn.Close()
+	defer conn.Close()
 
-	writedata := "THE TCP SERVER IS LOCATED AT " + GetLocalIP() + ":12345"
+	// Handle program termination gracefully
+	setupSignalHandler(conn)
 
-	buf := make([]byte, maxDatagramSize)
-	writebuf := []byte(writedata)
+	localIP := GetLocalIP()
+	response := fmt.Sprintf("THE TCP SERVER IS LOCATED AT %s:12345", localIP)
+	responseBytes := []byte(response)
+
+	buffer := make([]byte, maxDatagramSize)
+
 	for {
-		n, addr, err := ServerConn.ReadFromUDP(buf)
+		n, addr, err := conn.ReadFromUDP(buffer)
 		if err != nil {
-			fmt.Println("Error: ", err)
+			fmt.Println("Error reading from UDP:", err)
 			continue
 		}
-		message := make([]byte, n)
-		copy(message, buf[:n])
-		fmt.Println("Received", string(message), " from ", addr)
-		if string(message) == "REQUEST" {
-			_, err = ServerConn.WriteToUDP(writebuf, addr)
+
+		message := string(buffer[:n])
+		fmt.Println("Received", message, "from", addr)
+
+		if message == requestString {
+			_, err = conn.WriteToUDP(responseBytes, addr)
 			if err != nil {
-				fmt.Println("Error: ", err)
+				fmt.Println("Error sending response:", err)
 				continue
 			}
-			fmt.Println("Sent", string(writebuf), "from", GetLocalIP()+":10001", "to", addr)
+			fmt.Println("Sent", response, "to", addr)
 		}
 	}
 }
 
-// GetLocalIP returns the non loopback local IP of the host
+// GetLocalIP returns the non-loopback local IP of the host
 func GetLocalIP() string {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
 		return ""
 	}
 	for _, address := range addrs {
-		// check the address type, if it is not a loopback address then display it
 		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
 			if ipnet.IP.To4() != nil {
 				return ipnet.IP.String()
@@ -64,4 +74,17 @@ func GetLocalIP() string {
 		}
 	}
 	return ""
+}
+
+// setupSignalHandler sets up a signal handler to clean up resources on program termination
+func setupSignalHandler(conn *net.UDPConn) {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		<-c
+		fmt.Println("\nReceived termination signal. Cleaning up resources...")
+		conn.Close()
+		os.Exit(0)
+	}()
 }
