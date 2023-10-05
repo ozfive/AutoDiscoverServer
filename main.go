@@ -1,7 +1,8 @@
 package main
 
 import (
-	"fmt"
+	"encoding/gob"
+	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -26,13 +27,13 @@ func main() {
 
 	udpAddr, err := net.ResolveUDPAddr("udp", serverAddr)
 	if err != nil {
-		fmt.Println("Error resolving UDP address:", err)
+		log.Println("Error resolving UDP address:", err)
 		os.Exit(1)
 	}
 
 	conn, err := net.ListenUDP("udp", udpAddr)
 	if err != nil {
-		fmt.Println("Error listening:", err)
+		log.Println("Error listening:", err)
 		os.Exit(1)
 	}
 	defer conn.Close()
@@ -45,13 +46,13 @@ func main() {
 	for {
 		n, _, err := conn.ReadFromUDP(buffer)
 		if err != nil {
-			fmt.Println("Error reading from UDP:", err)
+			log.Println("Error reading from UDP:", err)
 			continue
 		}
 
 		var request DiscoveryRequest
 		if err := decoder.Decode(&request); err != nil {
-			fmt.Println("Error decoding request:", err)
+			log.Println("Error decoding request:", err)
 			continue
 		}
 
@@ -60,10 +61,10 @@ func main() {
 			response := DiscoveryResponse{Address: localIP + ":12345"}
 
 			if err := encoder.Encode(response); err != nil {
-				fmt.Println("Error encoding response:", err)
+				log.Println("Error encoding response:", err)
 				continue
 			}
-			fmt.Println("Sent response to discovery request from", request.Command)
+			log.Println("Sent response to discovery request from", request.Command)
 		}
 	}
 }
@@ -91,7 +92,7 @@ func setupSignalHandler(conn *net.UDPConn) {
 
 	go func() {
 		<-c
-		fmt.Println("\nReceived termination signal. Cleaning up resources...")
+		log.Println("\nReceived termination signal. Cleaning up resources...")
 		conn.Close()
 		os.Exit(0)
 	}()
