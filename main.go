@@ -14,6 +14,13 @@ const (
 	requestString   = "REQUEST"
 )
 
+type DiscoveryRequest struct {
+	Command string
+}
+
+type DiscoveryResponse struct {
+	Address string
+}
 func main() {
 	serverAddr := fmt.Sprintf(":%d", servicePort)
 
@@ -30,32 +37,33 @@ func main() {
 	}
 	defer conn.Close()
 
-	// Handle program termination gracefully
-	setupSignalHandler(conn)
-
-	localIP := GetLocalIP()
-	response := fmt.Sprintf("THE TCP SERVER IS LOCATED AT %s:12345", localIP)
-	responseBytes := []byte(response)
-
 	buffer := make([]byte, maxDatagramSize)
 
+	decoder := gob.NewDecoder(conn)
+	encoder := gob.NewEncoder(conn)
+
 	for {
-		n, addr, err := conn.ReadFromUDP(buffer)
+		n, _, err := conn.ReadFromUDP(buffer)
 		if err != nil {
 			fmt.Println("Error reading from UDP:", err)
 			continue
 		}
 
-		message := string(buffer[:n])
-		fmt.Println("Received", message, "from", addr)
+		var request DiscoveryRequest
+		if err := decoder.Decode(&request); err != nil {
+			fmt.Println("Error decoding request:", err)
+			continue
+		}
 
-		if message == requestString {
-			_, err = conn.WriteToUDP(responseBytes, addr)
-			if err != nil {
-				fmt.Println("Error sending response:", err)
+		if request.Command == "REQUEST" {
+			localIP := GetLocalIP()
+			response := DiscoveryResponse{Address: localIP + ":12345"}
+
+			if err := encoder.Encode(response); err != nil {
+				fmt.Println("Error encoding response:", err)
 				continue
 			}
-			fmt.Println("Sent", response, "to", addr)
+			fmt.Println("Sent response to discovery request from", request.Command)
 		}
 	}
 }
