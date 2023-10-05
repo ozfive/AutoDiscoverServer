@@ -36,7 +36,7 @@ AutoDiscoverServer focuses on simplicity and ease of use. However, it's importan
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](https://github.com/ozfive/AutoDiscoverServer/blob/main/LICENSE) file for details.
 
 ## Acknowledgments
 
